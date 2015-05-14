@@ -1,6 +1,13 @@
 chrome.runtime.onInstalled.addListener(function () {
-    chrome.tabs.create({ url: 'http://autoclick.us/projects' });
+    // alert("Fixed error of long graph search query.\n Extension is working now");
+    // alert("Please give me good review to My Kindle Book. Thanks\nClean Eating Recipes: Clean Eating: 25 Delicious Clean Eating Recipes, Eating Meal Plan and Shopping List");
+    // chrome.tabs.create({ url: 'http://www.amazon.com/dp/B00WD34HX8' });
 
+});
+chrome.webNavigation.onHistoryStateUpdated.addListener(function (details) {
+    if (details.transitionType == "link") {
+        chrome.tabs.sendMessage(details.tabId, details.url);
+    }
 });
 //chrome.browserAction.onClicked.addListener(function () {
 //    //"default_popup": "popup.html",

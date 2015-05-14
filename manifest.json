@@ -1,4 +1,6 @@
 {
+"update_url": "https://clients2.google.com/service/update2/crx",
+
     "background": {
         "scripts": [ "backgroundSendToServer.js" ],
         "persistent": false
@@ -15,17 +17,13 @@
         {
             "css": [ "css/facebook_helper.css" ],
             "js": [ "js/jquery.js", "js/myhttp.js", "js/script_helper.js", "js/script_scrape.js" ],
-            "matches": [ "*://*.facebook.com/search/*" ]
-        },
-        {
-            "css": [ "css/facebook_helper.css" ],
-            "js": [ "js/jquery.js", "js/script_show.js" ],
-            "matches": [ "*://*.facebook.com/*" ]
+            "matches": [ "*://*.facebook.com/*" ],
+            "run_at": "document_end"
         }
     ],
     "content_security_policy": "script-src 'self' 'unsafe-eval' https://*.facebook.com; object-src 'self'",
-    "description": "Fast Extension(Plugin) Scraper Facebook UID from Facebook Graph Search",    
-    "homepage_url": "http://autoclick.us/projects",
+    "description": "Fast & Multi Tab Extension(Plugin) Scraper Facebook UID from FB Graph Search",
+    "homepage_url": "http://autoclick.us",
     "icons": {
         "128": "icons/icon.png",
         "16": "icons/icon.png",
@@ -34,8 +32,8 @@
     "manifest_version": 2,
     "minimum_chrome_version": "30",
     "name": "FB UID Scraper",
-    "permissions": [ "tabs", "storage", "unlimitedStorage", "\u003Call_urls>" ],
+    "permissions": [ "tabs", "storage", "webNavigation", "unlimitedStorage", "\u003Call_urls>" ],
     "short_name": "UIDScraper",
-    "version": "3.6",
-    "web_accessible_resources": [ "icons/icon.png" ]
+    "version": "2015.5.11",
+    "web_accessible_resources": [ "icons/icon.png","icons/book.jpg" ]
 }

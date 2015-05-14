@@ -1,7 +1,8 @@
 ﻿var headernextencoded;
 var _lists = 'lists';
-var listId;
-var listName;
+var listId, autoDownload, showAlert;
+var listName, nextTimer;
+var linkToken;
 //Helper start
 function DecodeEncodedNonAsciiCharacters(x) {
     var r = /\\u([\d\w]{4})/gi;
@@ -35,7 +36,10 @@ function SubstringHeaderNext(htmlreload) {
 }
 function cutNextUrl(htmlreload) {
     var footernext = SubstringFooterNext(htmlreload);
-    return 'https://www.facebook.com/ajax/pagelet/generic.php/BrowseScrollingSetPagelet?data=' + headernextencoded + ',' + footernext + '&__a';
+    var jsonPost = headernextencoded + ',' + footernext;
+    jsonPost = decodeURIComponent(jsonPost);
+    jsonPost = encodeURIComponent(jsonPost);
+    return footernext && 'https://www.facebook.com/ajax/pagelet/generic.php/BrowseScrollingSetPagelet?data=' + jsonPost + '&__a';
 
 }
 function getData(link, onSuccess, onError) {
@@ -49,8 +53,70 @@ function getData(link, onSuccess, onError) {
         }
     })
 }
-//Helper end
+function SaveToLocalMobile(_lstResult, _listId) {
 
+
+    $('body').find('[download]').remove();
+    const MIME_TYPE = 'text/plain;charset=UTF-8';
+    var savedata = '"UID","Name","Email @facebook"\n';
+    for (var i = 0; i < _lstResult.length; i++) {
+        savedata += '"' + _lstResult[i].join('","') + '"\n';
+    }
+    var bb = new Blob([savedata], { type: MIME_TYPE });
+    var link = document.createElement("a");
+    link.textContent = "Save as csv";
+    link.download = "FB_UID_Scraper_Small" + _listId + '.csv';
+    link.href = window.URL.createObjectURL(bb);
+
+    //window.open(link); //debug only
+
+    document.body.appendChild(link);
+
+    if ($('body').find('[download]').length != 0) {
+        link.click();
+    }
+
+
+}
+function SaveToLocal(_lstResult, _listId) {
+
+
+    $('body').find('[download]').remove();
+    const MIME_TYPE = 'text/plain;charset=UTF-8';
+    var savedata = '"UID","Name","Sex","Email @facebook","Location","Job","Company","Work","Education"\n';
+    for (var i = 0; i < _lstResult.length; i++) {
+        savedata += '"' + _lstResult[i].join('","') + '"\n';
+    }
+    var bb = new Blob([savedata], { type: MIME_TYPE });
+    var link = document.createElement("a");
+    link.textContent = "Save as csv";
+    link.download = "FB_UID_Scraper_" + _listId + '.csv';
+    link.href = window.URL.createObjectURL(bb);
+
+    //window.open(link); //debug only
+
+    document.body.appendChild(link);
+
+    if ($('body').find('[download]').length != 0) {
+        link.click();
+    }
+
+
+}
+//Helper end
+function completed() {
+    if (autoDownload) {
+        chrome.storage.local.get(listId, function (data) {
+
+            SaveToLocalMobile(data[listId], listName);
+            //            SaveToLocal(data[listId], listName);
+            showAlert || alert('Scrape and Save completed');
+        });
+    } else {
+        showAlert || alert('Scrape completed. Please click download list');
+
+    }
+}
 function showNext_callback(htmlnext) {
     var htmldoc = SubString({ invl: htmlnext, startvl: 'payload":"', addstartindex: 'payload":"'.length, endvl: 'jsmods', addendindex: -3 });
 
@@ -64,37 +130,57 @@ function showNext_callback(htmlnext) {
         selectData(htmldecoded);
         footernext = SubstringFooterNext(htmlnext);
         if (footernext.length <= 0) {
+            completed();
             return;
         }
     }
     else {
+        alert("error. Can not load more uid");
         return;
     }
     var urlNextPage = cutNextUrl(htmlnext);
-    getData(urlNextPage, showNext_callback, function (_link) {
-        getData(_link, showNext_callback, function () {
-            console.log('error link: '+_link);
-            Log("load next data error");
-        });
-    });
+    if (urlNextPage) {
+        if (nextTimer) {
+            clearTimeout(nextTimer);
+        }
+        nextTimer = setTimeout(function () {
+            getData(urlNextPage, showNext_callback, function (_link) {//onError function
+                getData(_link, showNext_callback, function () {
+                    completed();
+                });
+            });
+        }, 1000);
+    } else {
+        completed();
+    }
 
 
 }
 function selectData(_html) {
-    var nodelist = $(_html).find("div[data-bt^='{\"id\":']>div>a");//.//button[@data-profileid and @type='button']");////div[contains(@data-bt,'id')]
+    var nodelist = $(_html).find("div[data-bt^='{\"id\":']>div>div>a ");//.//button[@data-profileid and @type='button']");////div[contains(@data-bt,'id')]
     if (nodelist.length > 0) {
         var uid, name, sex, profile_url, current_location_name, job = '', company, Work, Education;
         var currList;
         var _lists = 'lists';
+        var lcount = 0;
         //----
-        chrome.storage.local.get(_lists, function (data) {
-            var lists_data = data[_lists];
-            if (lists_data) {
-                currList = lists_data[listId];
-            }
+        chrome.storage.local.get(listId, function (data) {
+            var currList = data[listId] || [];
+
             $(nodelist).each(function () {
                 var item = $(this).next();
                 profile_url = $(this).attr('href');
+                if (profile_url) {
+                    var uname = /\.com\/(.+)\?ref/.exec(profile_url);
+                    if (uname) {
+                        profile_url = uname[1] + '@facebook.com';
+                    } else {
+                        uname = /\?id=(.+)\&ref/.exec(profile_url);
+                        if (uname) {
+                            profile_url = uname[1] + '@facebook.com';
+                        }
+                    }
+                }
                 name = item.find("div[data-bt='{\"ct\":\"title\"}'] a").text();
                 if (!name) {
                     name = item.find("a div.clearfix>div").text();
@@ -142,17 +228,62 @@ function selectData(_html) {
                         sex = "Female";
                     }
                 }
-
-                currList.items[currList.count] = [uid, name, sex, profile_url, current_location_name, job, company, Work, Education];
-                currList.count = currList.count + 1;
+                lcount = currList.length;
+                currList[lcount] = [uid, name, sex, profile_url, current_location_name, job, company, Work, Education];
+                lcount++;
             });
             //------
             var objsave = {};
-            var objId = {};
-            objId[listId] = currList;
-            objsave[_lists] = objId;
+            objsave[listId] = currList;
             chrome.storage.local.set(objsave, function () {
-                Log('items (' + currList.count + ')');
+                Log('items (' + lcount + ')');
+            });
+        });
+
+
+    }
+}
+function selectDataMobile(_html) {
+    var nodelist = $(_html).find(".ib>i[aria-label]");//.//button[@data-profileid and @type='button']");////div[contains(@data-bt,'id')]
+    if (nodelist.length > 0) {
+        var uid, name, email;
+        var currList;
+        var _lists = 'lists';
+        var lcount = 0;
+        //----
+        chrome.storage.local.get(listId, function (data) {
+            var currList = data[listId] || [];
+            $(nodelist).each(function () {
+                var item = $(this).parent().parent().find("a[data-store*='result_id']");
+                uid = /result_id\":(.+),/.exec(item.attr('data-store')) || 'empty';
+                if (uid != 'empty') {
+                    uid = uid[1];
+                } else {
+                    console.log("Mobile  uid not found");
+                }
+                email = item.attr('href');
+                if (email.indexOf("/profile.php") == 0) {
+                    email = uid + "@facebook.com";
+                } else {
+                    email = /\/(.+)\?/.exec(item.attr('href')) || 'empty';
+                    if (email != 'empty') {
+                        email = email[1] + "@facebook.com";
+                    } else {
+                        email = uid + "@facebook.com";
+                    }
+                }
+
+                name = $(this).attr('aria-label');
+                lcount = currList.length;
+                currList[lcount] = [uid, name, email];
+                lcount++;
+            });
+    
+            //------
+            var objsave = {};
+            objsave[listId] = currList;
+            chrome.storage.local.set(objsave, function () {
+                Log('items (' + lcount + ')');
             });
         });
 
@@ -171,36 +302,112 @@ function RunScarapingDetail(currHtml, currLink) {
     getData(currLink, function (htmlreload) {
         headernextencoded = SubstringHeaderNext(htmlreload).replace(/\\\//g, '/');;
         var urlNextPage = cutNextUrl(htmlreload);
-        getData(urlNextPage, showNext_callback, function () {
-            Log("load next data error");
-        });
-
+        if (urlNextPage) {
+            getData(urlNextPage, showNext_callback, function () {
+                completed();
+            });
+        } else {
+            completed();
+        }
     }, function () {
-        Log("load data error");
-    });
+            Log("load data error");
+        });
 }
-function RunScraping(currHtml, currLink, lid, lname) {
-
+function RunScrapingPC(currHtml, currLink, lid, lname, autodownload, showalert) {
+    autoDownload = autodownload;
+    showAlert = showalert;
     listId = lid;
     listName = lname;
     if (listName) {//list moi
 
-        var currList = {};
-        currList[listId] = {
-            'count': 0,
-            'name': listName,
-            'items': []
-        };
 
-        var objsave = {};
-        objsave[_lists] = currList;
-        chrome.storage.local.set(objsave, function () {
-            RunScarapingDetail(currHtml, currLink);
+        chrome.storage.local.get(_lists, function (data) {
+            var currList = data[_lists] || {};
+            currList[listId] = listName;
+            var objsave = {};
+            objsave[_lists] = currList;
+            chrome.storage.local.set(objsave, function () {
+                RunScarapingDetail(currHtml, currLink);
+            });
         });
     } else//list cu
     {
         RunScarapingDetail(currHtml, currLink);
     }
 
+
+}
+//Mobile code
+function next_callback_Mobile(htmlreload) {
+    linkToken = /token\":\"(.+)\",\"valid/.exec(htmlreload);
+    if (linkToken && linkToken.length > 1) {
+        linkToken = linkToken[1];
+    } else {
+        console.log('null token');
+        linkToken = "";
+    }
+    //completed();//test completed now
+    var urlNextPage = /see_more_pager\",\"href\":\"(.+)\&usid/.exec(htmlreload);
+    if (urlNextPage && urlNextPage.length > 0) {
+        if (nextTimer) {
+            clearTimeout(nextTimer);
+        }
+        var nextUrl=urlNextPage[1].replace(/\\\//g, '/');
+        nextUrl=nextUrl.replace(/\\u002520/g,"%20");
+//        nextUrl=nextUrl.replace(/\\/g,"");
+        nextTimer = setTimeout(function () {
+            $.ajax({
+                url: nextUrl,
+                dataType: 'text'
+            }).done(next_callback_Mobile)
+                .error(function () {
+                Log("load data error");
+                completed();
+            });
+        }, 500);
+    } else {
+        completed();
+    }
+    selectDataMobile($(htmlreload).find('#root').html());//select current page
+    
+}
+function RunScarapingDetailMobile(currLink) {
+
+    
+    //showNext_callback(fullHtml);
+    //-----------Begin Facebook---------------------
+    $.ajax({
+        url: currLink,
+        dataType: 'text'
+    }).done(next_callback_Mobile)
+        .error(function () {
+        Log("load data error");
+    });
+}
+function RunScraping(currHtml, currLink, lid, lname, autodownload, showalert) {
+
+    autoDownload = autodownload;
+    linkArray = currLink.split('/')[4];
+    var linkMobileGraph = currLink.replace("https://www.facebook.com/search/", "https://m.facebook.com/graphsearch/");
+//    linkMobileGraph=linkMobileGraph
+    openAlert = showalert;
+    listId = lid;
+    listName = lname;
+    if (listName) {//list moi
+
+
+        chrome.storage.local.get("lists", function (data) {
+            var currList = data[_lists] || {};
+            currList[listId] = listName;
+            var objsave = {};
+            objsave[_lists] = currList;
+            chrome.storage.local.set(objsave, function () {
+                RunScarapingDetailMobile(linkMobileGraph);
+            });
+        });
+    } else//list cu
+    {
+        RunScarapingDetailMobile(linkMobileGraph);
+    }
 
 }
